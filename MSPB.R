@@ -11,6 +11,7 @@ library(skimr)
 library(modelsummary)
 library(foreign)
 library(MASS)
+library(brant)
 #install.packages("sandwich", repos="http://R-Forge.R-project.org")
 library(sandwich)
 #2016 Merit Service Protection Board - Path 1 survey (wp violence)
@@ -88,12 +89,17 @@ modelsummary::msummary(myprobit, vcov = list('iid', 'HC0', 'HC1', 'HC2', 'HC3', 
 summary(myprobit)
 
 ## fit ordered logit model and store results 'm'
-m <- polr(report1 ~ female + salary*minority, data = d2, Hess=TRUE)
 d2$report1 <- d2$report 
 d2$report1<-as.factor(d2$report1)
 is.factor(d2$report1)
+
+m <- polr(report1 ~ female + salary*minority, data = d2, Hess=TRUE)
+
 summary(m)
 
-## check
+## parallel trends check
+brant(m)
+
+
 
 
