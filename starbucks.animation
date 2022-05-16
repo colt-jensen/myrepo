@@ -1,0 +1,89 @@
+#load data ---------
+library(readxl)
+
+starbucks <- read_excel("r-git/myrepo/data/Starbucks.xlsx")
+starbucks
+
+#necessary packages ---------
+library(ggplot2)
+library(gganimate)
+library(gifski)
+library(maps)
+library(lubridate)
+
+#example of us map 
+plot_usmap(regions = "counties") + 
+  labs(title = "US Counties",
+       subtitle = "This is a blank map of the counties of the United States.") + 
+  theme(panel.background = element_rect(color = "black", fill = "lightblue"))
+
+#can also just do a state map
+#which_state <- "california"
+#county_info <- map_data("county", region=which_state)
+
+#base map -------
+
+us_states <- map_data("state")
+
+us_states
+
+base_map <- ggplot(data = us_states, mapping =  aes(x=long, y=lat, group = group)) +
+  geom_polygon(color = "black", fill = "white") +
+  coord_quickmap() +
+  theme_void() 
+
+base_map
+
+#fun with dates --------
+
+starbucks$date1 <- as.Date(starbucks$date)
+starbucks$date1
+format(starbucks$date1, "%j")
+
+starbucks$julian <- yday(starbucks$date1)
+starbucks$julian
+
+starbucks$week <- week(starbucks$date1)
+starbucks$week
+
+#use this one
+starbucks$diff <- (starbucks$date1 - starbucks$date1[1])
+starbucks$diff <- as.numeric(starbucks$diff)
+
+starbucks$diff
+
+?lubridate
+
+#building the animation ------
+
+map_with_data <- base_map +
+  geom_point(data = starbucks, aes(x = long, y = lat, group=diff))
+map_with_data
+
+map_with_data
+
+#needed features for animation ------
+
+min_long <- min(starbucks$long)
+max_long <- max(starbucks$long)
+min_lat <- min(starbucks$lat)
+max_lat <- max(starbucks$lat)
+num_days <- max(starbucks$diff) - min(starbucks$diff) + 1
+
+legend_title <- "Union Vote"
+
+#final animation ----
+
+map_with_data <- base_map +
+  geom_point(data = starbucks, aes(x = long, y = lat, group=diff, color=factor(Result1))) +
+  labs(color = "Union Vote\n") +
+  scale_color_manual(labels = c("Against Union", "For Union"), values = c("red", "green")) +
+    transition_time(diff) +
+  ggtitle('Starbucks Unionization Since 12/09/2022',
+          subtitle = 'Day {frame} of {nframes}') +
+  shadow_mark()
+animate(map_with_data, nframes = num_days, fps = 2)
+
+starbucks$Result1 <- as.numeric(starbucks$Result1)
+
+anim_save("starbucks.gif")
