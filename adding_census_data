@@ -1,0 +1,171 @@
+#tidycensus ---------
+library(tidycensus)
+library(censusapi)
+library(tidyverse)
+library(dplyr)
+library(tigris)
+library(readxl)
+library(writexl)
+
+# Add key to .Renviron
+Sys.setenv(CENSUS_KEY="Your Key Here")
+# Reload .Renviron
+readRenviron("~/.Renviron")
+# Check to see that the expected key is output in your R console
+Sys.getenv("CENSUS_KEY")
+
+#this shows you all the data sources you can pull from
+apis <- listCensusApis()
+View(apis)
+
+#digging into one dataset
+meta1 <- listCensusMetadata(name = "acs/acs5/subject", vintage = 2019, type = "variables")
+View(meta1)
+
+meta2 <- listCensusMetadata(name = "acs/acs5/profile", vintage = 2019, type = "variables")
+View(meta2)
+
+meta3 <- listCensusMetadata(name = "acs/acs5/profile", vintage = 2019, type = "geography")
+View(meta3)
+
+meta3 <- listCensusMetadata(name = "acs/acs5/subject", vintage = 2019, type = "geography")
+View(meta4)
+
+# Variables and geography levels available in ACS 5-yr subject dataset as of 2019
+head(listCensusMetadata(name = "acs/acs5/subject", vintage = 2019, type = "variables"))
+head(listCensusMetadata(name = "acs/acs5/subject", vintage = 2019, type = "geography"))
+
+head(listCensusMetadata(name = "acs/acs5/profile", vintage = 2019, type = "variables"))
+head(listCensusMetadata(name = "acs/acs5/profile", vintage = 2019, type = "geography"))
+
+view(listCensusMetadata(name = "acs/acs5/profile", vintage = 2019, type = "variables"))
+
+#example 1
+acs_broadband_pct <- getCensus(name = "acs/acs5/subject", vintage = 2019,
+                               vars = c("S2801_C02_017E","S2801_C02_019E","S2801_C02_016E","S2801_C02_018E",
+                                        "S2801_C02_006E","S2801_C02_002E"), # Selected broadband variables
+                               region = "place:*", # '*' mean all places
+                               regionin = "state:13") # 13 is GA state FIPS code
+
+head(acs_broadband_pct)
+
+"example 2 - to id variables use:subject- https://api.census.gov/data/2015/acs/acs1/subject/groups.html
+ & profile- https://api.census.gov/data/2015/acs/acs1/profile/groups.html"
+city_demo <- getCensus(name = "acs/acs5/subject", vintage = 2020,
+                       vars = c("S0101_C01_001E", "S1903_C02_001E", "S1901_C01_012E", 
+                                "S2301_C04_001E", "S1701_C02_001E",  "S1501_C01_015E", "S0103_C02_001E"), # Selected community variables
+                       region = "place:*", # '*' mean all places
+                       regionin = "state:13")
+
+#S0101_C01_001E = pop, S1701_C02_001E = poverty, S1901_C01_012E = med_inc
+#"S2301_C04_001E = unemployment, S1501_C01_015E = educ (bach +), S0103_C02_001E = 65+
+
+#city_demo <- getCensus(name = "acs/acs5/profile", vintage = 2020,
+                       vars = c("DP02_0058E"), # Selected community variables
+                       region = "place:*", # '*' mean all places
+                       regionin = "state:13")
+
+#DP05_0001E = pop, 
+
+head(city_demo)
+
+#convert to %
+
+city_demo$pop <- city_demo$S0101_C01_001E
+
+city_demo$pop
+
+city_demo$med_inc <- city_demo$S1901_C01_012E
+
+city_demo$med_inc
+
+city_demo$unemploy <- city_demo$S2301_C04_001E
+
+city_demo$unemploy
+
+city_demo$college <- city_demo$S1501_C01_015E/city_demo$S0101_C01_001E
+
+city_demo$college
+
+city_demo$pov_rate <- city_demo$S1701_C02_001E/city_demo$S0101_C01_001E
+
+city_demo$pov_rate
+
+city_demo$sixtyfive_plus <- city_demo$S0103_C02_001E/city_demo$S0101_C01_001E
+
+city_demo$sixtyfive_plus
+
+#example - GEOID = (state+place) ------
+ga_income <- get_acs(
+  geography = "place", 
+  variables = "B19013_001",
+  state = "GA", #FIPS 13
+  year = 2020,
+  geometry = TRUE
+)
+
+head(ga_income)
+view(ga_income)
+
+ga_income$place <- gsub(', Georgia', '', ga_income$NAME)
+
+ga_income$place
+
+#creating geoid - source: https://www.census.gov/programs-surveys/geography/guidance/geo-identifiers.html
+class(city_demo$state)
+
+class(city_demo$place)
+
+city_demo$state <- as.numeric(city_demo$state)
+city_demo$place <- as.numeric(city_demo$place)
+
+#unite - do not sum
+city_demo <- city_demo %>%
+  unite("GEOID", state:place, sep = "", remove=FALSE)
+
+city_demo$GEOID
+
+#load dataset two ------
+ga_cities <- read_excel("GA-Service-Delivery.xlsx")
+view(ga_cities)
+
+#matching place capitalization
+ga_cities$place <- gsub('City', 'city', ga_cities$place)
+ga_cities$place <- gsub('Town', 'town', ga_cities$place)
+ga_cities$place
+
+#merge-----
+total <- merge(ga_income,ga_cities,by="place")
+view(total)
+
+total1 <- merge(total,city_demo,by="GEOID")
+view(total1)
+
+v16 <- load_variables(2019, "acs5", cache = TRUE)
+v16
+
+
+
+#export -------------
+write_xlsx(total1,"demo.xlsx")
+
+#check model assumptions -------
+#source: https://easystats.github.io/performance/ 
+library("performance")
+
+model1 <- lm(pov_rate ~ unemploy + college, data = total1)
+model2 <- lm(pov_rate ~ unemploy, data = total1)
+summary(model)
+r2(model)
+check_model(model) #model diagnostic
+model_performance(model) #AIC/BIC
+compare_performance(model1, model2, rank = TRUE)
+plot(compare_performance(model1, model2, rank = TRUE))
+
+#for non-linear models
+check_heteroscedasticity(model)
+check_singularity(model)
+check_zeroinflation(model)
+check_overdispersion(model)
+icc(model)
+
