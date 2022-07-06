@@ -1,0 +1,85 @@
+# Introduction to webscraping
+library(tidyverse)
+library(rvest)
+library(tidytext)
+
+#read in URL - Woodrow Wilson 1920: State of the Union
+html <- read_html("https://millercenter.org/the-presidency/presidential-speeches/december-7-1920-eighth-annual-message")
+
+html1 <- html %>%
+  html_element(".presidential-speeches--body-wrapper") %>% # use selector gadget to get this info
+  html_text2()
+
+html1
+
+#convert to usable data frame ----------
+d <- tibble(html1)
+
+tidy_woodrow <- unnest_tokens(tbl = d,
+                              output = 'word',
+                              input = 'html1')
+
+#word counts - commerce --------------
+word_commerce <- tidy_woodrow |>
+  filter(word == 'commerce') |>
+  nrow()
+
+word_commerce
+
+#faith > money
+tidy_woodrow |>
+  count(word) |>
+  filter(word %in% c('commerce', 'price', 'faith', 'economy'))
+
+#this catches variations and pluraities 
+word_count <- tidy_woodrow |>
+  count(word) |>
+  filter(str_detect(word, 'econom|^nation|^law'))
+
+word_count
+
+#word cloud -------------
+library(wordcloud2)
+
+tibble(html1) |>
+  unnest_tokens(input = 'html1',
+                output = 'word') |>
+  anti_join(get_stopwords()) |>
+  count(word) |>
+  rename(freq = n) |>
+  wordcloud2()
+
+#n-grams -----------------------------
+html_bigrams <- tibble(d) |>
+  unnest_tokens(bigram, html1, token = "ngrams", n = 2) 
+
+#lots of meaningless stopwords
+html_bigrams %>%
+  count(bigram, sort = TRUE) 
+
+#stopwords --------
+# Let's look at the list of stop words from Mosteller & Wallace (1964) 
+mw1964_words <- c("a", "all", "also", "an", "and", "any", "are", "as", "at", "be", "been", "but", "by", "can", "do", "down",
+                  "even", "every", "for", "from", "had", "has", "have", "her", "his", "if", "in", "into", "is", "it", "its",
+                  "may", "more", "must", "my", "no", "not", "now", "of", "on", "one", "only", "or", "our", "shall", "should",
+                  "so", "some", "such", "than", "that", "the", "their", "then", "there", "things", "this", "to", "up", "upon",
+                  "was", "were", "what", "when", "which", "who", "will", "with", "would", "your")
+
+all_stopwords <- union(mw1964_words, get_stopwords()$word)
+all_stopwords
+
+#filtering out stopwords 
+html_separated <- html_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+html1_filtered <- html_separated %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords)
+
+bigram_counts <- html1_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts
+
+# save output
+#write_csv(word_count, file = 'data/woodrow-wilson-test.csv')
