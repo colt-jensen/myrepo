@@ -1,0 +1,445 @@
+# load packages
+library(tidyverse)
+library(tidytext)
+library(tesseract)
+library(pdftools)
+library(magick)
+library(readtext)
+library(dplyr)
+library(tm)
+library(ggpubr)
+
+#do not use this for other work - use stopwords on webscrape
+
+# Let's look at the list of stop words from Mosteller & Wallace (1964) + words after "Your" are exam specific
+mw1964_words <- c("a", "all", "also", "an", "and", "any", "are", "as", "at", "be", "been", "but", "by", "can", "do", "down",
+                  "even", "every", "for", "from", "had", "has", "have", "her", "his", "if", "in", "into", "is", "it", "its",
+                  "may", "more", "must", "my", "no", "not", "now", "of", "on", "one", "only", "or", "our", "shall", "should",
+                  "so", "some", "such", "than", "that", "the", "their", "then", "there", "things", "this", "to", "up", "upon",
+                  "was", "were", "what", "when", "which", "who", "will", "with", "would", "your", "following", "please", "question", 
+                  "examination", "questions", "ii", "iii", "i","fall", "discussion", "explain", "discuss", "answer", "describe", "two",
+                  "example")
+                  
+               
+
+all_stopwords <- union(mw1964_words, get_stopwords()$word)
+all_stopwords <- data.frame(all_stopwords)
+all_stopwords$all_stopwords
+
+# directory
+setwd("~/Downloads/Comps")
+
+#loading data 
+pa <- readtext("PA/*.docx")
+
+pa
+
+policy <- readtext("Policy/*.docx")
+
+policy$text
+#convert to usable data frame: single words ----------
+#pa
+d <- tibble(pa)
+
+tidy_pa <- unnest_tokens(tbl = d,
+                              output = 'word',
+                              input = 'text')
+
+#most common words 
+tidy_pa %>%
+  count(word, sort = TRUE)
+
+#filtering out stopwords for pa 
+pa_filtered <- tidy_pa %>%
+  filter(!word %in% all_stopwords$all_stopwords) 
+
+pa_count <- pa_filtered %>% 
+  count(word, sort = TRUE)
+
+pa_count
+
+#visual
+pa_count %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(word, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("Keywords") +
+  ylab("Frequency") +
+  ggtitle("PA Comp Keywords")
+
+#policy
+b <- tibble(policy)
+
+tidy_policy <- unnest_tokens(tbl = b,
+                         output = 'word',
+                         input = 'text')
+
+
+#filtering out stopwords for policy 
+policy_filtered <- tidy_policy %>%
+  filter(!word %in% all_stopwords$all_stopwords) 
+
+policy_count <- policy_filtered %>% 
+  count(word, sort = TRUE)
+
+policy_count
+
+#visual
+policy_count %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(word, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("Keywords") +
+  ylab("Frequency") +
+  ggtitle("Policy Comp Keywords")
+
+#most common phrases: two word phrases  -------------------
+#pa
+pa_bigrams <- tibble(pa) |>
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) 
+
+#lots of meaningless stopwords
+#filtering out stopwords 
+pa_separated <- pa_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+pa_filtered <- pa_separated %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords)
+
+pa_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+pa_filtered$phrase <- paste(pa_filtered$word1, pa_filtered$word2, sep =  " ")
+
+pa_filtered_count <- pa_filtered %>% 
+  count(phrase, sort = TRUE)
+
+pa_filtered_count
+
+#most common phrases: three word phrases  -------------------
+#pa
+pa_trigrams <- tibble(pa) |>
+  unnest_tokens(trigram, text, token = "ngrams", n = 3) 
+
+#lots of meaningless stopwords
+#filtering out stopwords 
+pa_separated1 <- pa_trigrams %>%
+  separate(trigram, c("word1", "word2", "word3"), sep = " ")
+
+pa_filtered1 <- pa_separated1 %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords) %>%
+  filter(!word3 %in% all_stopwords$all_stopwords) 
+
+pa_counts1 <- pa_filtered1 %>% 
+  count(word1, word2, word3, sort = TRUE)
+
+pa_filtered1$phrase <- paste(pa_filtered1$word1, pa_filtered1$word2, pa_filtered1$word3, sep =  " ")
+
+pa_filtered_count1 <- pa_filtered1 %>% 
+  count(phrase, sort = TRUE)
+
+pa_filtered_count1
+
+#visualize:phrases ---------
+pa_filtered_count %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(phrase, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("2-Word Phrase") +
+  ylab("Frequency") +
+  ggtitle("PA Comp Phrases")
+
+pa_filtered_count1 %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(phrase, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("3-Word Phrase") +
+  ylab("Frequency") +
+  ggtitle("PA Comp Phrases")
+
+pa_filtered_count2 %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(phrase, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("4-Word Phrase") +
+  ylab("Frequency") +
+  ggtitle("PA Comp Phrases")
+
+
+#most common phrases: four word phrases  -------------------
+#pa
+pa_quadgrams <- tibble(pa) |>
+  unnest_tokens(quadgrams, text, token = "ngrams", n = 4) #quadgrams doesn't matter - only creates varname
+
+#lots of meaningless stopwords
+#filtering out stopwords 
+pa_separated2 <- pa_quadgrams %>%
+  separate(quadgrams, c("word1", "word2", "word3", "word4"), sep = " ")
+
+pa_filtered2 <- pa_separated2 %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords) %>%
+  filter(!word3 %in% all_stopwords$all_stopwords) %>%
+  filter(!word4 %in% all_stopwords$all_stopwords) 
+
+pa_counts2 <- pa_filtered2 %>% 
+  count(word1, word2, word3, word4, sort = TRUE)
+
+pa_filtered2$phrase <- paste(pa_filtered2$word1, pa_filtered2$word2, pa_filtered2$word3, pa_filtered2$word4,  sep =  " ")
+
+pa_filtered_count2 <- pa_filtered2 %>% 
+  count(phrase, sort = TRUE)
+
+pa_filtered_count2
+
+#policy n grams --------------------
+#policy - 2 word
+policy_bigrams <- tibble(b) |>
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) 
+
+#lots of meaningless stopwords
+#filtering out stopwords 
+policy_separated <- policy_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+policy_filtered <- policy_separated %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords)
+
+policy_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+policy_filtered$phrase <- paste(policy_filtered$word1, policy_filtered$word2, sep =  " ")
+
+policy_filtered_count <- policy_filtered %>% 
+  count(phrase, sort = TRUE)
+
+policy_filtered_count
+
+#visualize
+policy_filtered_count %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(phrase, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("2-Word Phrase") +
+  ylab("Frequency") +
+  ggtitle("Policy Comp Phrases")
+
+#policy - 3 word
+policy_trigrams <- tibble(b) |>
+  unnest_tokens(trigram, text, token = "ngrams", n = 3) 
+
+#lots of meaningless stopwords
+#filtering out stopwords 
+policy_separated1 <- policy_trigrams %>%
+  separate(trigram, c("word1", "word2", "word3"), sep = " ")
+
+policy_filtered1 <- policy_separated1 %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords) %>%
+  filter(!word3 %in% all_stopwords$all_stopwords)
+
+policy_filtered1 %>% 
+  count(word1, word2, word3, sort = TRUE)
+
+policy_filtered1$phrase <- paste(policy_filtered1$word1, policy_filtered1$word2, policy_filtered1$word3, sep =  " ")
+
+policy_filtered_count1 <- policy_filtered1 %>% 
+  count(phrase, sort = TRUE)
+
+policy_filtered_count1
+
+#visualize
+policy_filtered_count1 %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(phrase, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("3-Word Phrase") +
+  ylab("Frequency") +
+  ggtitle("Policy Comp Phrases")
+
+#policy - 4 word
+policy_quadgrams <- tibble(b) |>
+  unnest_tokens(quadgrams, text, token = "ngrams", n = 4) 
+
+#lots of meaningless stopwords
+#filtering out stopwords 
+policy_separated2 <- policy_quadgrams %>%
+  separate(quadgrams, c("word1", "word2", "word3", "word4"), sep = " ")
+
+policy_filtered2 <- policy_separated2 %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords) %>%
+  filter(!word3 %in% all_stopwords$all_stopwords) %>%
+  filter(!word4 %in% all_stopwords$all_stopwords)
+
+policy_filtered2 %>% 
+  count(word1, word2, word3, word4, sort = TRUE)
+
+policy_filtered2$phrase <- paste(policy_filtered2$word1, policy_filtered2$word2, policy_filtered2$word3, policy_filtered2$word4, sep =  " ")
+
+policy_filtered_count2 <- policy_filtered2 %>% 
+  count(phrase, sort = TRUE)
+
+policy_filtered_count2
+
+#visualize
+policy_filtered_count2 %>% 
+  arrange(desc(n)) %>%
+  slice(1:15) %>%
+  ggplot(., aes(x=reorder(phrase, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("4-Word Phrase") +
+  ylab("Frequency") +
+  ggtitle("Policy Comp Phrases")
+
+#visualize: single word -----------
+#option 1
+pa_count %>% 
+  arrange(desc(n)) %>%
+  slice(1:12) %>%
+  ggplot(., aes(x=reorder(word, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("Keyword") +
+  ylab("Frequency") +
+  ggtitle("PA Comp Keywords")
+
+pa_count %>% arrange(desc(n))
+
+#option 2
+pa_count_top <- top_n(pa_count, n=12, n)
+
+pa_count_top %>%  
+  ggplot(., aes(x=reorder(word, -n), y=n))+
+  geom_bar(stat='identity') +
+  theme(axis.text.x=element_text(angle=90,hjust=1))  +
+  xlab("Keyword") +
+  ylab("Frequency") 
+
+p
+
+
+p <- pa_count %>% 
+  filter(n > 40) %>% #manipulation
+  ggplot(data=pa_count, aes(x=word, y=n)) +
+  geom_bar(stat="identity") 
+
+max(pa_count$n)
+ 
+
+pa_count
+
+geom_bar(data=rsurvey %>%
+           filter(qr_experience == "Beginner"), 
+         
+p
+
+#policy
+policy_bigrams <- tibble(policy) |>
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) 
+
+#filtering out stopwords 
+policy_separated <- policy_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+policy_filtered <- policy_separated %>%
+  filter(!word1 %in% all_stopwords$all_stopwords) %>%
+  filter(!word2 %in% all_stopwords$all_stopwords)
+
+policy_counts <- policy_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+policy_counts
+
+
+#other text to data conversions ------------------------------------------------
+
+# png to text
+trump <- ocr(image = 'image/trump.png')
+trump
+
+#jpeg to text
+nyt_1918 <- ocr(image = 'image/NYTimes-Page1-11-11-1918.jpeg')
+nyt_1918
+
+
+## 3. Try a pdf with multiple columns ------------------------
+
+text <- pdftools::pdf_ocr_data('Test/Brown.pdf')
+# this approach doesn't recognize the two columns.
+
+# 1. convert to a png (just the third page)
+pdf_convert(pdf = 'Test/Brown.pdf',
+            format = 'png', dpi = 600,
+            pages = 2:3,
+            filenames = 'Test/brown_page2.png' & 'Test/brown_page3.png')
+# 2. read it in with magick
+brown2 <- image_read('Test/brown_page2.png')
+brown2
+
+# 2. Crop it into two images (syntax is ?width x height + left offset + top offset")
+brown_left <- image_crop(brown2, '2512.5 x 3262.5 + 0 + 0')
+brown_left
+
+brown_right <- image_crop(brown2, '2512.5 x 3262.5 + 0 + 0')
+brown_right
+
+# 3. OCR the text for each side
+text_left <- ocr(brown_left)
+text_right <- ocr(brown_right)
+
+# 4. Paste together
+text <- paste(text_left, text_right)
+
+text
+
+#make it a dataframe
+
+text_df <- tibble(line = 1, text = text)
+
+text_df
+
+#most common words 
+text_df %>%
+  unnest_tokens(word, text)
+
+# word cloud packages
+library(tidytext)
+library(wordcloud2)
+
+text_df %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 1) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+
+#word cloud
+wordcloud2(text)
+
+tibble(text) |>
+  unnest_tokens(input = 'text',
+                output = 'word') |>
+  anti_join(get_stopwords()) |>
+  count(word) |>
+  rename(freq = n) |>
+  wordcloud2()
