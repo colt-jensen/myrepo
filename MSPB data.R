@@ -3,7 +3,7 @@ library(readr)
 MSPB_p1 <- read_csv("path1 (1)/MSPB_MPS2016_Path1_Rel.CSV")
 View(MSPB_p1)
 
-d <- MSPB_p1
+d <- MSPB_p1 
 
 #female
 table(d$DEM_12)
